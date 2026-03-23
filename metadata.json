@@ -1,0 +1,5 @@
+{
+  "name": "Sales tracker",
+  "description": "A streamlined system for retail managers to track daily cement sales, replacing manual Excel processes. The app allows for easy input of sales data and automatically calculates and flags any discrepancies in revenue.",
+  "requestFramePermissions": []
+}
