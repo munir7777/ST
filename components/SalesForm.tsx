@@ -88,6 +88,7 @@ const initialFormState = {
   totalTransfer: '',
   expenses: '',
   notes: '',
+  deliveryId: '',
 };
 
 export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onCancelEdit, inventory, shopOptions, stockTypes }) => {
@@ -107,12 +108,28 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
         totalTransfer: String(editingSale.totalTransfer),
         expenses: String(editingSale.expenses || ''),
         notes: String(editingSale.notes || ''),
+        deliveryId: editingSale.deliveryId || '',
       });
     } else {
       setFormData(initialFormState);
     }
   }, [editingSale]);
   
+  useEffect(() => {
+    // Smart selection of delivery
+    if (formData.shopName && formData.stockType && !editingSale) {
+      const deliveries = (inventory[formData.shopName]?.deliveries || [])
+        .filter(d => d.stockType === formData.stockType && d.remainingQuantity > 0)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      if (deliveries.length > 0 && formData.deliveryId === '') {
+        setFormData(prev => ({ ...prev, deliveryId: deliveries[0].id }));
+      } else if (deliveries.length === 0) {
+        setFormData(prev => ({ ...prev, deliveryId: '' }));
+      }
+    }
+  }, [formData.shopName, formData.stockType, inventory, editingSale, formData.deliveryId]);
+
   useEffect(() => {
     const bags = parseFloat(formData.bagsSold) || 0;
     const price = parseFloat(formData.pricePerBag) || 0;
@@ -127,10 +144,20 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // If shop or stock type changed, reset deliveryId to let the smart selection pick the best one
+    if (name === 'shopName' || name === 'stockType') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        deliveryId: '', // Reset to trigger smart select
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -147,6 +174,7 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
       pricePerBag: parseFloat(formData.pricePerBag) || 0,
       totalTransfer: parseFloat(formData.totalTransfer) || 0,
       expenses: parseFloat(formData.expenses) || 0,
+      deliveryId: formData.deliveryId,
     } as unknown as SaleRecord; // Cast to SaleRecord, parent will recalculate fields
     
     onSubmit(submissionData);
@@ -158,9 +186,14 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
     }
   };
   
-  const currentStock = formData.shopName && formData.stockType
-    ? (inventory[formData.shopName]?.currentStock[formData.stockType] || 0)
-    : 0;
+  const availableDeliveries = formData.shopName && formData.stockType
+    ? (inventory[formData.shopName]?.deliveries || []).filter(d => d.stockType === formData.stockType && d.remainingQuantity > 0)
+    : [];
+  
+  // Calculate total stock from individual deliveries for UI consistency
+  const totalStockFromDeliveries = availableDeliveries.reduce((sum, d) => sum + d.remainingQuantity, 0);
+
+  const selectedDelivery = availableDeliveries.find(d => d.id === formData.deliveryId);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -177,9 +210,9 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
               <label htmlFor="shopName" className="block text-sm font-medium text-slate-400">
                 Shop Name
               </label>
-              {formData.shopName && (
+              {formData.shopName && formData.stockType && (
                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                    Stock: {currentStock}
+                    Total Available: {totalStockFromDeliveries}
                  </span>
               )}
             </div>
@@ -230,6 +263,43 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label htmlFor="deliveryId" className="block text-sm font-medium text-slate-400 ml-1">
+                Select Delivery Batch
+            </label>
+            <div className="relative group">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                <CalendarIcon className="h-4 w-4" />
+              </div>
+              <select
+                  id="deliveryId"
+                  name="deliveryId"
+                  value={formData.deliveryId}
+                  onChange={handleChange}
+                  required
+                  className="block w-full pl-11 pr-4 py-2.5 bg-slate-900/50 border border-white/10 rounded-xl text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium appearance-none"
+              >
+                  <option value="" disabled>Choose the specific delivery date...</option>
+                  {availableDeliveries.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — {d.remainingQuantity} bags left
+                    </option>
+                  ))}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                <Plus className="h-4 w-4 rotate-45" />
+              </div>
+            </div>
+            {selectedDelivery && (
+              <div className="flex justify-between px-1 mt-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Selected Batch Stock:</span>
+                <span className="text-[10px] font-mono font-bold text-emerald-400">
+                    {selectedDelivery.remainingQuantity} bags
+                </span>
+              </div>
+            )}
+          </div>
+
           <InputField 
             label="Bags Sold" 
             name="bagsSold" 
@@ -238,7 +308,11 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
             onChange={handleChange} 
             icon={<Hash className="h-4 w-4" />}
             suffix="Bags"
+            placeholder={selectedDelivery ? `Max ${selectedDelivery.remainingQuantity}` : "0"}
           />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <InputField 
             label="Price per Bag" 
             name="pricePerBag" 
@@ -248,8 +322,17 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
             icon={<DollarSign className="h-4 w-4" />}
             suffix="NGN"
           />
+          <InputField 
+            label="Total Transfer" 
+            name="totalTransfer" 
+            type="number" 
+            value={formData.totalTransfer} 
+            onChange={handleChange} 
+            icon={<CreditCard className="h-4 w-4" />}
+            suffix="NGN"
+          />
         </div>
-        
+
         <motion.div 
             layout
             className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex justify-between items-center"
@@ -264,17 +347,8 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
                 {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(expectedRevenue)}
             </p>
         </motion.div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InputField 
-            label="Total Transfer" 
-            name="totalTransfer" 
-            type="number" 
-            value={formData.totalTransfer} 
-            onChange={handleChange} 
-            icon={<CreditCard className="h-4 w-4" />}
-            suffix="NGN"
-          />
           <InputField 
             label="Expenses" 
             name="expenses" 
@@ -312,7 +386,7 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
             className="p-4 bg-slate-900/50 rounded-2xl border border-white/5 space-y-3"
         >
             <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500">Total Deductions:</span>
+                <span className="text-slate-500">Total Accounted:</span>
                 <span className="font-bold text-slate-300 font-mono">
                     {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format((parseFloat(formData.totalTransfer) || 0) + (parseFloat(formData.expenses) || 0))}
                 </span>

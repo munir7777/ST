@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Document ID: userId (UID)
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - email: string (required) - User email
+    //   - displayName: string (optional) - User display name
+    //   - photoURL: string (optional) - User photo URL
+    //   - role: string (required, 'admin' or 'user') - User role
+    //
+    // Collection: /users/{userId}/sales/{saleId}
+    // Document ID: saleId (auto-generated)
+    // Fields:
+    //   - date: string (required, YYYY-MM-DD)
+    //   - shopName: string (required)
+    //   - stockType: string (required, 'DANGOTE' or 'ASHAKA')
+    //   - bagsSold: number (required, >= 0)
+    //   - pricePerBag: number (required, >= 0)
+    //   - totalTransfer: number (required, >= 0)
+    //   - expenses: number (required, >= 0)
+    //   - notes: string (optional, < 1000 chars)
+    //   - expectedRevenue: number (required)
+    //   - discrepancy: number (required)
+    //   - authorUid: string (required, matches userId)
+    //
+    // Collection: /users/{userId}/inventory/{shopId}
+    // Document ID: shopId (shop name)
+    // Fields:
+    //   - shopName: string (required)
+    //   - currentStock: map (required)
+    //     - DANGOTE: number
+    //     - ASHAKA: number
+    //   - deliveries: list (required, < 1000 items)
+    //   - authorUid: string (required, matches userId)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "muniribraheemiya1142@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'user'];
+    }
+
+    function isValidSale(data) {
+      return hasRequiredFields(['date', 'shopName', 'stockType', 'bagsSold', 'pricePerBag', 'totalTransfer', 'expenses', 'expectedRevenue', 'discrepancy', 'authorUid', 'deliveryId']) &&
+             hasOnlyAllowedFields(['date', 'shopName', 'stockType', 'bagsSold', 'pricePerBag', 'totalTransfer', 'expenses', 'notes', 'expectedRevenue', 'discrepancy', 'authorUid', 'deliveryId']) &&
+             isValidDateString(data.date) &&
+             data.stockType in ['DANGOTE', 'ASHAKA'] &&
+             data.bagsSold >= 0 &&
+             data.pricePerBag >= 0 &&
+             data.totalTransfer >= 0 &&
+             data.expenses >= 0 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+             data.authorUid == request.auth.uid &&
+             data.deliveryId is string && data.deliveryId.size() <= 128;
+    }
+
+    function isValidInventory(data) {
+      return hasRequiredFields(['shopName', 'currentStock', 'deliveries', 'authorUid']) &&
+             hasOnlyAllowedFields(['shopName', 'currentStock', 'deliveries', 'authorUid']) &&
+             data.currentStock is map &&
+             data.currentStock.DANGOTE is number &&
+             data.currentStock.ASHAKA is number &&
+             data.deliveries is list &&
+             data.deliveries.size() < 1000 &&
+             data.authorUid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+
+      match /sales/{saleId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidSale(request.resource.data);
+        allow update: if isOwner(userId) && isValidSale(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /inventory/{shopId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidInventory(request.resource.data);
+        allow update: if isOwner(userId) && isValidInventory(request.resource.data);
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

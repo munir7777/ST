@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "User photo URL" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "User role" }
+      },
+      "required": ["uid", "email"]
+    },
+    "SaleRecord": {
+      "title": "SaleRecord",
+      "description": "A single sale transaction record",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date", "description": "Date of sale" },
+        "shopName": { "type": "string", "description": "Name of the shop" },
+        "stockType": { "type": "string", "enum": ["DANGOTE", "ASHAKA"], "description": "Type of cement" },
+        "bagsSold": { "type": "number", "description": "Number of bags sold" },
+        "pricePerBag": { "type": "number", "description": "Price per bag" },
+        "totalTransfer": { "type": "number", "description": "Total amount transferred" },
+        "expenses": { "type": "number", "description": "Total expenses" },
+        "notes": { "type": "string", "description": "Notes or expense details" },
+        "expectedRevenue": { "type": "number", "description": "Calculated expected revenue" },
+        "discrepancy": { "type": "number", "description": "Calculated discrepancy" },
+        "authorUid": { "type": "string", "description": "UID of the user who created the record" },
+        "deliveryId": { "type": "string", "description": "ID of the specific delivery this sale is linked to" }
+      },
+      "required": ["date", "shopName", "stockType", "bagsSold", "pricePerBag", "totalTransfer", "expectedRevenue", "discrepancy", "authorUid", "deliveryId"]
+    },
+    "ShopInventory": {
+      "title": "ShopInventory",
+      "description": "Inventory data for a specific shop",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string", "description": "Name of the shop" },
+        "currentStock": {
+          "type": "object",
+          "properties": {
+            "DANGOTE": { "type": "number" },
+            "ASHAKA": { "type": "number" }
+          }
+        },
+        "deliveries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "date": { "type": "string", "format": "date" },
+              "quantity": { "type": "number" },
+              "remainingQuantity": { "type": "number" },
+              "stockType": { "type": "string", "enum": ["DANGOTE", "ASHAKA"] }
+            }
+          }
+        },
+        "authorUid": { "type": "string", "description": "UID of the user who owns this inventory" }
+      },
+      "required": ["shopName", "currentStock", "deliveries", "authorUid"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/users/{userId}/sales/{saleId}": {
+      "schema": "SaleRecord",
+      "description": "Sales records for a specific user"
+    },
+    "/users/{userId}/inventory/{shopId}": {
+      "schema": "ShopInventory",
+      "description": "Inventory data for a specific user's shop"
+    }
+  }
+}

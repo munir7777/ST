@@ -1,9 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Download, 
   Plus, 
   Archive, 
   Filter, 
@@ -76,8 +74,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         endDate: '',
     });
     const [isFilterVisible, setIsFilterVisible] = useState(false);
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-    const [exportRange, setExportRange] = useState({ startDate: '', endDate: '' });
     const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null);
     const { showToast } = useToast();
 
@@ -102,103 +98,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             return shopMatch && startDateMatch && endDateMatch;
         });
     }, [sales, filters]);
-
-    const handleExportToExcel = (dataToExportOverride?: SaleRecord[]) => {
-        const salesToExport = dataToExportOverride || filteredSales;
-        
-        if (salesToExport.length === 0) {
-          showToast("No data available for the selected range to export.", 'error');
-          return;
-        }
-    
-        const header = [
-            'Date', 'Shop Name', 'Stock Type', 'Bags Sold', 
-            'Price per Bag (NGN)', 'Expected Revenue (NGN)', 'Amount Transferred (NGN)', 'Expenses (NGN)', 
-            'Notes / Expense Details', 'Discrepancy (NGN)'
-        ];
-        const currencyColumns = [4, 5, 6, 7, 9];
-        const notesColumn = 8;
-        const dateColumn = 0;
-    
-        const formattedData = salesToExport.map(sale => {
-            const expenseText = sale.expenses > 0 ? `[Exp: ₦${sale.expenses}] ` : '';
-            const combinedNotes = `${expenseText}${sale.notes ?? ''}`.trim();
-            
-            return [
-                new Date(sale.date + 'T00:00:00'),
-                sale.shopName,
-                sale.stockType,
-                sale.bagsSold,
-                sale.pricePerBag,
-                sale.expectedRevenue,
-                sale.totalTransfer,
-                sale.expenses,
-                combinedNotes,
-                sale.discrepancy,
-            ];
-        }).reverse();
-    
-        const worksheet = XLSX.utils.aoa_to_sheet([header, ...formattedData]);
-    
-        const headerStyle = {
-            font: { bold: true, color: { rgb: "FFFFFF" } },
-            fill: { fgColor: { rgb: "4F46E5" } }, // Indigo-600
-            alignment: { horizontal: "center", vertical: "center" }
-        };
-        const oddRowStyle = { fill: { fgColor: { rgb: "FFFFFF" } } }; // White
-        const evenRowStyle = { fill: { fgColor: { rgb: "F1F5F9" } } }; // slate-100
-    
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cell_address = { c: C, r: R };
-                const cell_ref = XLSX.utils.encode_cell(cell_address);
-                let cell = worksheet[cell_ref];
-                if (!cell) continue;
-    
-                if (R === 0) {
-                    cell.s = headerStyle;
-                } else {
-                    cell.s = (R % 2 === 0) ? evenRowStyle : oddRowStyle;
-                    
-                    if (C === dateColumn) {
-                        cell.t = 'd';
-                        cell.z = 'dd-mmm-yyyy';
-                    } else if (currencyColumns.includes(C)) {
-                        cell.t = 'n';
-                        cell.z = '₦#,##0.00;[Red]-₦#,##0.00';
-                    } else if (C === notesColumn && cell.v) {
-                         cell.s.alignment = { wrapText: true, vertical: 'top' };
-                    }
-                }
-            }
-        }
-    
-        const columnWidths = header.map((h, i) => {
-            const headerLength = h.length;
-            const lengths = formattedData.map(row => {
-                const value = row[i];
-                if (i === notesColumn && typeof value === 'string') {
-                    const longestLine = Math.max(...value.split('\n').map(l => l.length));
-                    return Math.min(60, longestLine);
-                }
-                if (i === dateColumn) return 12;
-                if (currencyColumns.includes(i)) return 18;
-                return String(value ?? '').length;
-            });
-            const maxLength = Math.max(0, ...lengths);
-            return { wch: Math.max(headerLength, maxLength) + 2 };
-        });
-        worksheet["!cols"] = columnWidths;
-        
-        worksheet['!autofilter'] = { ref: worksheet['!ref'] };
-        worksheet['!view'] = { freeze: { ySplit: 1 } };
-        
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Report");
-        const today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(workbook, `Sales_Report_${today}.xlsx`);
-    };
 
     const handleOpenDeleteModal = (sale: SaleRecord) => {
         setSaleToDelete(sale);
@@ -225,16 +124,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         });
     }
 
-    const handleRangeExport = () => {
-        const rangeSales = sales.filter(sale => {
-            const startMatch = exportRange.startDate ? sale.date >= exportRange.startDate : true;
-            const endMatch = exportRange.endDate ? sale.date <= exportRange.endDate : true;
-            return startMatch && endMatch;
-        });
-        handleExportToExcel(rangeSales);
-        setIsExportModalOpen(false);
-    };
-
     return (
         <div className="flex flex-col gap-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -245,18 +134,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               
               <div className="flex items-center gap-3">
                 <button 
+                  onClick={onOpenAddSale} 
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span>New Sale</span>
+                </button>
+                <button 
                   onClick={onOpenInventory} 
                   className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/5 border border-white/5 text-sm font-bold text-slate-200 hover:bg-white/10 transition-all active:scale-95"
                 >
                   <Archive className="h-5 w-5 text-indigo-400" />
                   <span>Inventory</span>
-                </button>
-                <button 
-                  onClick={() => setIsExportModalOpen(true)} 
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
-                >
-                  <Download className="h-5 w-5" />
-                  <span>Export Report</span>
                 </button>
               </div>
             </div>
@@ -371,37 +260,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     <ShopPerformance sales={filteredSales} shopOptions={shopOptions} />
                 </div>
             </div>
-
-            <ConfirmationModal
-                isOpen={isExportModalOpen}
-                onClose={() => setIsExportModalOpen(false)}
-                onConfirm={handleRangeExport}
-                title="Export Sales Report"
-                message={
-                  <div className="space-y-6">
-                    <p className="text-slate-300">Select a date range for the Excel export. Leave blank to export all records.</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <DatePicker 
-                            label="Start Date" 
-                            value={exportRange.startDate} 
-                            onChange={(date) => setExportRange(prev => ({ ...prev, startDate: date }))} 
-                        />
-                        <DatePicker 
-                            label="End Date" 
-                            value={exportRange.endDate} 
-                            onChange={(date) => setExportRange(prev => ({ ...prev, endDate: date }))} 
-                        />
-                    </div>
-                    <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            <span className="font-bold text-indigo-400">Note:</span> The exported file will include detailed expense notes combined with transaction remarks for better clarity.
-                        </p>
-                    </div>
-                  </div>
-                }
-                confirmText="Generate Excel"
-                type="info"
-            />
 
             <ConfirmationModal
                 isOpen={!!saleToDelete}

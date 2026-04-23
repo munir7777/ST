@@ -52,7 +52,7 @@ const formatDate = (dateString: string) => {
     });
 };
 
-type SortKey = 'date' | 'stockType' | 'quantity';
+type SortKey = 'date' | 'stockType' | 'quantity' | 'remainingQuantity';
 type SortDirection = 'ascending' | 'descending';
 
 const SortButton: React.FC<{
@@ -159,6 +159,9 @@ const DeliveryHistoryTable: React.FC<{
                             <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                 <SortButton sortKey="quantity" sortConfig={sortConfig} requestSort={requestSort} className="justify-end">Quantity</SortButton>
                             </th>
+                            <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                <SortButton sortKey="remainingQuantity" sortConfig={sortConfig} requestSort={requestSort} className="justify-end">Remaining</SortButton>
+                            </th>
                             <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
                         </tr>
                     </thead>
@@ -179,6 +182,11 @@ const DeliveryHistoryTable: React.FC<{
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-white text-right font-mono font-bold">{delivery.quantity} bags</td>
+                                    <td className="px-6 py-4 text-sm text-right font-mono font-bold">
+                                        <span className={delivery.remainingQuantity === 0 ? 'text-slate-600' : 'text-indigo-400'}>
+                                            {delivery.remainingQuantity} bags
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-sm text-center">
                                         <button 
                                             onClick={() => onDelete(delivery)} 
@@ -192,7 +200,7 @@ const DeliveryHistoryTable: React.FC<{
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={4} className="px-6 py-12 text-center">
+                                <td colSpan={5} className="px-6 py-12 text-center">
                                     <div className="flex flex-col items-center gap-2 text-slate-600">
                                         <AlertCircle className="h-8 w-8 opacity-20" />
                                         <p className="text-xs font-bold uppercase tracking-widest">No matching records</p>
@@ -380,14 +388,24 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ inventory, s
                                                     <span className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">{shopName}</span>
                                                 </td>
                                                 <td className="px-8 py-5 text-right">
-                                                    <span className="text-sm font-black text-indigo-400 font-mono">
-                                                        {shopData?.currentStock?.DANGOTE || 0}
-                                                    </span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-sm font-black text-indigo-400 font-mono">
+                                                            {shopData?.currentStock?.DANGOTE || 0}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
+                                                            From {(shopData?.deliveries || []).filter(d => d.stockType === 'DANGOTE' && d.remainingQuantity > 0).length} Batches
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-8 py-5 text-right">
-                                                    <span className="text-sm font-black text-emerald-400 font-mono">
-                                                        {shopData?.currentStock?.ASHAKA || 0}
-                                                    </span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-sm font-black text-emerald-400 font-mono">
+                                                            {shopData?.currentStock?.ASHAKA || 0}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
+                                                            From {(shopData?.deliveries || []).filter(d => d.stockType === 'ASHAKA' && d.remainingQuantity > 0).length} Batches
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-8 py-5 text-center">
                                                     <motion.div 

@@ -13,14 +13,17 @@ export interface SaleRecord {
   notes?: string;
   expectedRevenue: number;
   discrepancy: number;
+  authorUid?: string;
+  deliveryId?: string;
 }
 
-export type NewSaleData = Omit<SaleRecord, 'id' | 'expectedRevenue' | 'discrepancy'>;
+export type NewSaleData = Omit<SaleRecord, 'id' | 'expectedRevenue' | 'discrepancy' | 'authorUid'>;
 
 export interface DeliveryRecord {
   id: string;
   date: string;
   quantity: number;
+  remainingQuantity: number;
   stockType: StockType;
 }
 
@@ -30,6 +33,8 @@ export interface ShopInventory {
     ASHAKA: number;
   };
   deliveries: DeliveryRecord[];
+  authorUid?: string;
+  shopName?: string;
 }
 
 export type InventoryData = {
