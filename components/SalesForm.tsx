@@ -50,7 +50,7 @@ const InputField: React.FC<InputFieldProps> = ({ label, name, type, value, requi
         required={required}
         step={type === 'number' ? '0.01' : undefined}
         min={type === 'number' ? '0' : undefined}
-        className={`block w-full ${icon ? 'pl-11' : 'px-4'} ${suffix ? 'pr-12' : 'pr-4'} py-2.5 bg-slate-900/50 border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium`}
+        className={`block w-full ${icon ? 'pl-11' : 'px-4'} ${suffix ? 'pr-12' : 'pr-4'} py-3 sm:py-2.5 bg-slate-900/50 border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium`}
         placeholder={placeholder || (type === 'number' ? '0' : '')}
       />
       {suffix && (
@@ -375,7 +375,7 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
                 value={formData.notes}
                 onChange={handleChange}
                 rows={3}
-                className="block w-full pl-11 pr-4 py-2.5 bg-slate-900/50 border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
+                className="block w-full pl-11 pr-4 py-3 sm:py-2.5 bg-slate-900/50 border border-white/10 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
                 placeholder="e.g., Transport costs, loading fees..."
             />
           </div>

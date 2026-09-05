@@ -81,16 +81,20 @@ export const ShopPerformance: React.FC<ShopPerformanceProps> = ({ sales, shopOpt
     }
 
     return (
-        <div className="overflow-x-auto no-scrollbar">
-            <table className="min-w-full border-separate border-spacing-y-3">
+        <div>
+            <div className="sm:hidden flex items-center justify-between text-[11px] text-slate-400 font-medium px-2 py-1 mb-2">
+                <span>↔ Swipe table horizontally to see all metrics</span>
+            </div>
+            <div className="overflow-x-auto custom-scrollbar pb-2">
+                <table className="min-w-[800px] w-full whitespace-nowrap border-separate border-spacing-y-3">
                 <thead>
                     <tr className="text-slate-500">
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest">Shop Location</th>
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Bags Sold</th>
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Revenue</th>
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Transferred</th>
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Expenses</th>
-                        <th className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Discrepancy</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Shop Location</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Bags Sold</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Revenue</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Transferred</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Expenses</th>
+                        <th className="sticky top-0 z-10 px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Discrepancy</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -98,31 +102,31 @@ export const ShopPerformance: React.FC<ShopPerformanceProps> = ({ sales, shopOpt
                         <motion.tr 
                             layout
                             key={shop.shopName} 
-                            className="bg-slate-950/50 hover:bg-white/5 transition-all duration-300 group"
+                            className="bg-slate-900/40 hover:bg-slate-900/80 transition-all duration-300 group"
                         >
                             <td className="px-6 py-5 rounded-l-2xl border-y border-l border-white/5">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-indigo-500/10 rounded-xl group-hover:bg-indigo-500/20 transition-colors">
-                                        <Store className="h-4 w-4 text-indigo-400" />
+                                    <div className="w-9 h-9 bg-indigo-500/10 rounded-xl flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors border border-indigo-500/10">
+                                        <Store className="h-4.5 w-4.5 text-indigo-400 animate-pulse-slow" />
                                     </div>
-                                    <span className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">{shop.shopName}</span>
+                                    <span className="text-sm font-black text-white group-hover:text-indigo-400 transition-colors">{shop.shopName}</span>
                                 </div>
                             </td>
                             <td className="px-6 py-5 border-y border-white/5 text-right">
-                                <span className="text-sm font-bold text-slate-300">{shop.totalBagsSold} bags</span>
+                                <span className="text-sm font-black text-slate-300 font-mono">{shop.totalBagsSold} bags</span>
                             </td>
                             <td className="px-6 py-5 border-y border-white/5 text-right">
-                                <div className="text-sm text-white">
+                                <div className="text-sm font-black text-white">
                                     <CurrencyDisplay value={shop.totalRevenue} />
                                 </div>
                             </td>
                             <td className="px-6 py-5 border-y border-white/5 text-right">
-                                <div className="text-sm text-emerald-400">
+                                <div className="text-sm font-black text-emerald-400">
                                     <CurrencyDisplay value={shop.totalTransferred} />
                                 </div>
                             </td>
                             <td className="px-6 py-5 border-y border-white/5 text-right">
-                                <div className="text-sm text-rose-400">
+                                <div className="text-sm font-bold text-rose-400 font-mono">
                                     <CurrencyDisplay value={shop.totalExpenses} />
                                 </div>
                             </td>
@@ -133,6 +137,7 @@ export const ShopPerformance: React.FC<ShopPerformanceProps> = ({ sales, shopOpt
                     ))}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 };

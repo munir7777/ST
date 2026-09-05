@@ -15,11 +15,20 @@ import {
   User as UserIcon,
   ShieldCheck,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Users,
+  Shield,
+  UserPlus,
+  UserMinus,
+  Mail,
+  Trash2
 } from 'lucide-react';
 import { SaleRecord, InventoryData, StockType, DeliveryRecord } from './types';
 import { DashboardPage } from './pages/DashboardPage';
-import { SideMenu } from './components/SideMenu';
+import { NavMenu } from './components/NavMenu';
+import { SalesForm } from './components/SalesForm';
+import { InventoryManager } from './components/InventoryManager';
+import { handleDownloadCSV } from './utils/csvExport';
 import { ToastProvider, useToast } from './ToastContext';
 import { 
   auth, 
@@ -42,13 +51,25 @@ import {
   query, 
   orderBy, 
   writeBatch,
-  getDoc
+  getDoc,
+  where
 } from 'firebase/firestore';
 
-const shopOptions = Array.from({ length: 10 }, (_, i) => `Shop ${i + 1}`);
+const DEFAULT_SHOPS = [
+  'Abbakar',
+  'Bala',
+  'Zone 3',
+  'Lakare',
+  'Dandu',
+  'Hamid',
+  'Dauda',
+  'Husseini',
+  'Bibi',
+  'BEATRICE'
+];
 const stockTypes: StockType[] = ['DANGOTE', 'ASHAKA'];
 
-const initialInventory: InventoryData = shopOptions.reduce((acc, shopName) => {
+const initialInventory: InventoryData = DEFAULT_SHOPS.reduce((acc, shopName) => {
   acc[shopName] = { 
     currentStock: { DANGOTE: 0, ASHAKA: 0 }, 
     deliveries: [] 
@@ -117,8 +138,27 @@ const AppContent: React.FC = () => {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [inventory, setInventory] = useState<InventoryData>(initialInventory);
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null);
-  const [activeMenu, setActiveMenu] = useState<'sales' | 'inventory' | null>(null);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'new-sale' | 'inventory'>('dashboard');
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
+  const [filters, setFilters] = useState({ shopName: "", startDate: "", endDate: "" });
   const { showToast } = useToast();
+
+  const shopOptions = DEFAULT_SHOPS;
+
+  // Collaborators & Access State
+  const principalEmailAddress = 'muniribraheemiya1142@gmail.com';
+  const [targetUid, setTargetUid] = useState<string | null>(null);
+  const [myAccess, setMyAccess] = useState<{ principalUid: string; permission: 'view' | 'edit'; principalEmail: string } | null>(null);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [invitations, setInvitations] = useState<any[]>([]);
+
+  // Invitation fields for Principal's management UI
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePermission, setInvitePermission] = useState<'view' | 'edit'>('view');
+  const [isInviting, setIsInviting] = useState(false);
+
+  const isUserPrincipal = user?.email?.toLowerCase() === principalEmailAddress.toLowerCase();
+  const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
 
   // Auth Listener
   useEffect(() => {
@@ -135,24 +175,90 @@ const AppContent: React.FC = () => {
               email: currentUser.email,
               displayName: currentUser.displayName,
               photoURL: currentUser.photoURL,
-              role: 'user'
+              role: currentUser.email?.toLowerCase() === principalEmailAddress.toLowerCase() ? 'admin' : 'user'
             }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${currentUser.uid}`));
           }
         });
       } else {
         setSales([]);
         setInventory(initialInventory);
+        setTargetUid(null);
+        setMyAccess(null);
+        setCheckingAccess(true);
+        setInvitations([]);
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Firestore Listeners
+  // Access and Invitations Listener
   useEffect(() => {
-    if (!user || !isAuthReady) return;
+    if (!user) {
+      setCheckingAccess(false);
+      return;
+    }
+
+    setCheckingAccess(true);
+
+    if (isUserPrincipal) {
+      // The Principal always has access to their own data
+      setTargetUid(user.uid);
+      setMyAccess({
+        principalUid: user.uid,
+        permission: 'edit',
+        principalEmail: user.email || ''
+      });
+      setCheckingAccess(false);
+
+      // Listen to invitations sent by the Principal
+      const q = query(collection(db, 'invitations'), where('principalUid', '==', user.uid));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setInvitations(list);
+      }, (err) => console.error("Error fetching invitations:", err));
+
+      return () => unsubscribe();
+    } else {
+      // Collaborator access check: find incoming invitations
+      const collaboratorEmailLower = (user.email || '').toLowerCase();
+      const q = query(
+        collection(db, 'invitations'),
+        where('collaboratorEmail', '==', collaboratorEmailLower)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+          const docData = snapshot.docs[0].data();
+          setMyAccess({
+            principalUid: docData.principalUid,
+            permission: docData.permission as 'view' | 'edit',
+            principalEmail: docData.principalEmail
+          });
+          setTargetUid(docData.principalUid);
+        } else {
+          setMyAccess(null);
+          setTargetUid(null);
+        }
+        setCheckingAccess(false);
+      }, (err) => {
+        console.error("Error checking permissions:", err);
+        setCheckingAccess(false);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [user, isUserPrincipal]);
+
+  // Firestore Sales & Inventory Listeners
+  useEffect(() => {
+    if (!user || !isAuthReady || !targetUid) {
+      setSales([]);
+      setInventory(initialInventory);
+      return;
+    }
 
     const salesQuery = query(
-      collection(db, 'users', user.uid, 'sales'),
+      collection(db, 'users', targetUid, 'sales'),
       orderBy('date', 'desc')
     );
 
@@ -162,9 +268,9 @@ const AppContent: React.FC = () => {
         ...doc.data()
       })) as SaleRecord[];
       setSales(salesData);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/sales`));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${targetUid}/sales`));
 
-    const unsubscribeInventory = onSnapshot(collection(db, 'users', user.uid, 'inventory'), (snapshot) => {
+    const unsubscribeInventory = onSnapshot(collection(db, 'users', targetUid, 'inventory'), (snapshot) => {
       const invData: InventoryData = { ...initialInventory };
       snapshot.docs.forEach(doc => {
         const data = doc.data() as any;
@@ -173,13 +279,13 @@ const AppContent: React.FC = () => {
         invData[doc.id] = syncedData;
       });
       setInventory(invData);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${user.uid}/inventory`));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `users/${targetUid}/inventory`));
 
     return () => {
       unsubscribeSales();
       unsubscribeInventory();
     };
-  }, [user, isAuthReady]);
+  }, [user, isAuthReady, targetUid]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -223,7 +329,13 @@ const AppContent: React.FC = () => {
   };
 
   const handleAddSale = async (data: SaleRecord) => {
-    if (!user) return;
+    if (!user || !targetUid) return;
+
+    const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
+    if (!hasEditPermission) {
+      showToast('Error: You only have View-Only permissions. Actions are disabled.', 'error');
+      return;
+    }
 
     const shopInv = inventory[data.shopName];
     const delivery = shopInv?.deliveries.find(d => d.id === data.deliveryId);
@@ -245,7 +357,10 @@ const AppContent: React.FC = () => {
       const batch = writeBatch(db);
       
       // Add sale record
-      const saleRef = doc(collection(db, 'users', user.uid, 'sales'));
+      const timestamp = Date.now();
+      const randomPart = Math.random().toString(36).substring(2, 8);
+      const saleId = `${timestamp}_${randomPart}`;
+      const saleRef = doc(db, 'users', targetUid, 'sales', saleId);
       batch.set(saleRef, {
         date: data.date,
         shopName: data.shopName,
@@ -262,7 +377,7 @@ const AppContent: React.FC = () => {
       });
 
       // Update inventory
-      const shopRef = doc(db, 'users', user.uid, 'inventory', data.shopName);
+      const shopRef = doc(db, 'users', targetUid, 'inventory', data.shopName);
       let updatedShop = JSON.parse(JSON.stringify(inventory[data.shopName])); // Deep clone
       
       // Deduct from specific delivery
@@ -280,15 +395,22 @@ const AppContent: React.FC = () => {
       batch.set(shopRef, updatedShop);
 
       await batch.commit();
-      setActiveMenu(null);
+      setCurrentView('dashboard');
       showToast('Sale record added successfully.', 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/sales`);
+      handleFirestoreError(err, OperationType.WRITE, `users/${targetUid}/sales`);
     }
   };
 
   const handleUpdateSale = async (saleData: SaleRecord) => {
-    if (!user) return;
+    if (!user || !targetUid) return;
+
+    const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
+    if (!hasEditPermission) {
+      showToast('Error: You only have View-Only permissions. Actions are disabled.', 'error');
+      return;
+    }
+
     const originalSale = sales.find(s => s.id === saleData.id);
     if (!originalSale) return;
 
@@ -318,7 +440,7 @@ const AppContent: React.FC = () => {
       const batch = writeBatch(db);
       
       // Update sale record
-      const saleRef = doc(db, 'users', user.uid, 'sales', saleData.id);
+      const saleRef = doc(db, 'users', targetUid, 'sales', saleData.id);
       batch.update(saleRef, {
         ...saleData,
         expectedRevenue,
@@ -327,7 +449,7 @@ const AppContent: React.FC = () => {
       });
 
       // Revert original stock
-      const shopOrigRef = doc(db, 'users', user.uid, 'inventory', originalSale.shopName);
+      const shopOrigRef = doc(db, 'users', targetUid, 'inventory', originalSale.shopName);
       let shopOrig = JSON.parse(JSON.stringify(inventory[originalSale.shopName]));
       const origDelivery = shopOrig.deliveries.find((d: DeliveryRecord) => d.id === originalSale.deliveryId);
       if (origDelivery) {
@@ -337,7 +459,7 @@ const AppContent: React.FC = () => {
       batch.set(shopOrigRef, shopOrig);
 
       // Apply new stock
-      const shopNewRef = doc(db, 'users', user.uid, 'inventory', saleData.shopName);
+      const shopNewRef = doc(db, 'users', targetUid, 'inventory', saleData.shopName);
       let shopNew = (saleData.shopName === originalSale.shopName) ? shopOrig : JSON.parse(JSON.stringify(inventory[saleData.shopName]));
       
       const newDelivery = shopNew.deliveries.find((d: DeliveryRecord) => d.id === saleData.deliveryId);
@@ -352,24 +474,31 @@ const AppContent: React.FC = () => {
 
       await batch.commit();
       setEditingSale(null);
-      setActiveMenu(null);
+      setCurrentView('dashboard');
       showToast('Sale record updated successfully.', 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}/sales/${saleData.id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${targetUid}/sales/${saleData.id}`);
     }
   };
 
   const handleDeleteSale = async (saleToDelete: SaleRecord) => {
-    if (!user) return;
+    if (!user || !targetUid) return;
+
+    const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
+    if (!hasEditPermission) {
+      showToast('Error: You only have View-Only permissions. Actions are disabled.', 'error');
+      return;
+    }
+
     try {
       const batch = writeBatch(db);
       
       // Delete sale
-      const saleRef = doc(db, 'users', user.uid, 'sales', saleToDelete.id);
+      const saleRef = doc(db, 'users', targetUid, 'sales', saleToDelete.id);
       batch.delete(saleRef);
 
       // Revert stock
-      const shopRef = doc(db, 'users', user.uid, 'inventory', saleToDelete.shopName);
+      const shopRef = doc(db, 'users', targetUid, 'inventory', saleToDelete.shopName);
       let shopInventory = JSON.parse(JSON.stringify(inventory[saleToDelete.shopName]));
       const delivery = shopInventory.deliveries.find((d: DeliveryRecord) => d.id === saleToDelete.deliveryId);
       if (delivery) {
@@ -381,14 +510,21 @@ const AppContent: React.FC = () => {
       await batch.commit();
       showToast('Sale record deleted.', 'info');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${user.uid}/sales/${saleToDelete.id}`);
+      handleFirestoreError(err, OperationType.DELETE, `users/${targetUid}/sales/${saleToDelete.id}`);
     }
   };
   
   const handleAddDelivery = async (shopName: string, quantity: number, date: string, stockType: StockType) => {
-    if (!user) return;
+    if (!user || !targetUid) return;
+
+    const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
+    if (!hasEditPermission) {
+      showToast('Error: You only have View-Only permissions. Actions are disabled.', 'error');
+      return;
+    }
+
     try {
-      const shopRef = doc(db, 'users', user.uid, 'inventory', shopName);
+      const shopRef = doc(db, 'users', targetUid, 'inventory', shopName);
       let shopData = inventory[shopName] 
         ? JSON.parse(JSON.stringify(inventory[shopName]))
         : { currentStock: { DANGOTE: 0, ASHAKA: 0 }, deliveries: [] };
@@ -409,12 +545,19 @@ const AppContent: React.FC = () => {
       await setDoc(shopRef, shopData);
       showToast(`Delivery of ${quantity} bags added to ${shopName}.`, 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/inventory/${shopName}`);
+      handleFirestoreError(err, OperationType.WRITE, `users/${targetUid}/inventory/${shopName}`);
     }
   };
 
   const handleDeleteDelivery = async (shopName: string, deliveryId: string) => {
-    if (!user) return;
+    if (!user || !targetUid) return;
+
+    const hasEditPermission = isUserPrincipal || (myAccess?.permission === 'edit');
+    if (!hasEditPermission) {
+      showToast('Error: You only have View-Only permissions. Actions are disabled.', 'error');
+      return;
+    }
+
     try {
       let shopInventory = JSON.parse(JSON.stringify(inventory[shopName]));
       const deliveryToDelete = shopInventory.deliveries.find((d: DeliveryRecord) => d.id === deliveryId);
@@ -428,35 +571,103 @@ const AppContent: React.FC = () => {
       shopInventory.deliveries = shopInventory.deliveries.filter((d: DeliveryRecord) => d.id !== deliveryId);
       shopInventory = syncStockWithDeliveries(shopInventory);
 
-      const shopRef = doc(db, 'users', user.uid, 'inventory', shopName);
+      const shopRef = doc(db, 'users', targetUid, 'inventory', shopName);
       await setDoc(shopRef, shopInventory);
       showToast('Delivery record removed.', 'info');
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}/inventory/${shopName}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${targetUid}/inventory/${shopName}`);
+    }
+  };
+
+  const handleSendInvitation = async (email: string, permission: "view" | "edit") => {
+    if (!user) return;
+    try {
+      const emailLower = email.trim().toLowerCase();
+      const invId = `${user.uid}_${emailLower}`;
+      const invRef = doc(db, "invitations", invId);
+      await setDoc(invRef, {
+        principalUid: user.uid,
+        principalEmail: user.email || "",
+        collaboratorEmail: emailLower,
+        permission: permission,
+        createdAt: new Date().toISOString(),
+        invitedAt: new Date().toISOString(),
+      });
+      showToast("Invitation sent successfully.", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error sending invitation: ${err.message || err}`, "error");
+      throw err;
+    }
+  };
+
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const invRef = doc(db, "invitations", invitationId);
+      await deleteDoc(invRef);
+      showToast("Invitation revoked.", "info");
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error revoking invitation: ${err.message || err}`, "error");
+      throw err;
     }
   };
 
   const handleEditSale = (sale: SaleRecord) => { 
     setEditingSale(sale);
-    setActiveMenu('sales');
+    setCurrentView('new-sale');
   };
   const handleCancelEdit = () => { 
     setEditingSale(null);
-    setActiveMenu(null);
+    setCurrentView('dashboard');
   };
 
   const handleOpenAddSale = () => {
     setEditingSale(null);
-    setActiveMenu('sales');
+    setCurrentView('new-sale');
   };
 
   const handleOpenInventory = () => {
     setEditingSale(null);
-    setActiveMenu('inventory');
+    setCurrentView('inventory');
   };
   
   const handleToggleAccordion = (accordion: 'sales' | 'inventory') => {
-    setActiveMenu(prev => (prev === accordion ? null : accordion));
+    setCurrentView(accordion === 'sales' ? 'new-sale' : 'inventory');
+  };
+
+  const filteredSales = useMemo(() => {
+    const list = sales.filter((sale) => {
+      const shopMatch = filters.shopName
+        ? sale.shopName.toLowerCase().includes(filters.shopName.toLowerCase())
+        : true;
+      const startDateMatch = filters.startDate
+        ? sale.date >= filters.startDate
+        : true;
+      const endDateMatch = filters.endDate
+        ? sale.date <= filters.endDate
+        : true;
+      return shopMatch && startDateMatch && endDateMatch;
+    });
+    // Sort logic to prioritize recent sales from top to bottom
+    return list.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      
+      const aTimeMatch = a.id.match(/^(\d{13})_/);
+      const bTimeMatch = b.id.match(/^(\d{13})_/);
+      const aTime = aTimeMatch ? parseInt(aTimeMatch[1], 10) : 0;
+      const bTime = bTimeMatch ? parseInt(bTimeMatch[1], 10) : 0;
+      
+      if (aTime !== bTime) {
+        return bTime - aTime;
+      }
+      return b.id.localeCompare(a.id);
+    });
+  }, [sales, filters]);
+
+  const onExportCSV = () => {
+    handleDownloadCSV(filteredSales, filters, showToast);
   };
 
   const summaryData = useMemo(() => {
@@ -469,10 +680,10 @@ const AppContent: React.FC = () => {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#090A0C] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-          <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Initializing Secure Session...</p>
+          <div className="w-12 h-12 border-2 border-white/10 border-t-white rounded-full animate-spin" />
+          <p className="text-[#A1A1AA] font-mono text-xs uppercase tracking-widest">Initializing Session...</p>
         </div>
       </div>
     );
@@ -480,129 +691,188 @@ const AppContent: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 text-center space-y-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500" />
-          
-          <div className="space-y-4">
-            <div className="inline-flex p-4 bg-indigo-500/10 rounded-3xl">
-              <ShieldCheck className="h-12 w-12 text-indigo-400" />
+      <div className="min-h-screen bg-[#090A0C] flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {/* Subtle grid background */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')] opacity-100"></div>
+        
+        <div className="relative w-full max-w-sm">
+          <div className="flex flex-col items-center text-center mb-10">
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl mb-6 shadow-2xl">
+              <TrendingUp className="h-6 w-6 text-white" />
             </div>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-black text-white tracking-tight">Cement Sales Tracker</h1>
-              <p className="text-slate-400 font-medium leading-relaxed">Securely manage your shop inventory and sales records with real-time cloud backup.</p>
-            </div>
+            <h1 className="text-3xl font-display font-medium text-white mb-3">System Access</h1>
+            <p className="text-sm text-[#A1A1AA] leading-relaxed">
+              Authenticate to access the enterprise sales tracker and inventory management portal.
+            </p>
           </div>
-
-          <button 
-            onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-4 py-4 px-6 bg-white text-slate-950 font-black rounded-2xl transition-all hover:bg-slate-100 active:scale-95 shadow-xl shadow-white/5"
-          >
-            <img src="https://www.gstatic.com/firebase/anonymous-scan.png" className="h-6 w-6 hidden" alt="" />
-            <svg className="h-6 w-6" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            <span>Sign in with Google</span>
-          </button>
-
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Enterprise Grade Security Enabled</p>
+          
+          <div className="bg-[#121418] border border-white/5 rounded-2xl p-2 shadow-2xl">
+            <button 
+              onClick={handleGoogleSignIn}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-6 bg-white hover:bg-gray-100 text-[#090A0C] rounded-xl font-medium transition-all active:scale-[0.98]"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+          </div>
+          
+          <p className="text-center text-[10px] text-[#52525B] mt-8 uppercase tracking-widest font-mono">
+            Secure Environment
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans text-slate-300 selection:bg-indigo-500/30">
-      <header className="bg-slate-950/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-40">
+    <div className="min-h-screen bg-[#090A0C] font-sans text-[#A1A1AA] selection:bg-white/20">
+      <header className="bg-[#090A0C]/90 backdrop-blur-md border-b border-white/5 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-4">
-              <div className="p-2.5 bg-indigo-500 rounded-2xl shadow-lg shadow-indigo-500/20">
-                <TrendingUp className="h-6 w-6 text-white" />
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsNavMenuOpen(true)}
+                className="p-1.5 rounded-lg text-[#A1A1AA] hover:bg-white/5 hover:text-white transition-all active:scale-95"
+              >
+                <MenuIcon className="h-5 w-5" />
+              </button>
+              <div className="p-1.5 bg-white/5 border border-white/10 rounded-lg shadow-sm hidden sm:block">
+                <TrendingUp className="h-4 w-4 text-white" />
               </div>
-              <div className="hidden sm:block">
-                <h1 className="text-2xl font-black tracking-tight text-white">SalesTracker</h1>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Enterprise Dashboard</p>
+              <div>
+                <h1 className="text-lg font-display font-medium text-white leading-none tracking-tight">SalesTracker</h1>
               </div>
             </div>
             
             <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/5 mr-2">
+              <div className="hidden md:flex items-center gap-3 px-3 py-1.5 bg-[#121418] rounded-xl border border-white/5 mr-2">
                 {user.photoURL ? (
-                  <img src={user.photoURL} className="h-8 w-8 rounded-full border border-white/10" alt="" referrerPolicy="no-referrer" />
+                  <img src={user.photoURL} className="h-6 w-6 rounded-full border border-white/10" alt="" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-indigo-500 flex items-center justify-center">
-                    <UserIcon className="h-4 w-4 text-white" />
+                  <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center">
+                    <UserIcon className="h-3 w-3 text-white" />
                   </div>
                 )}
                 <div className="flex flex-col">
-                  <span className="text-xs font-bold text-white truncate max-w-[120px]">{user.displayName}</span>
-                  <span className="text-[10px] font-medium text-slate-500 truncate max-w-[120px]">{user.email}</span>
+                  <span className="text-xs font-medium text-white truncate max-w-[120px]">{user.displayName}</span>
                 </div>
               </div>
 
               <button 
-                onClick={handleOpenAddSale}
-                className="hidden sm:flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
-              >
-                <Plus className="h-5 w-5" />
-                <span>New Sale</span>
-              </button>
-
-              <button 
                 onClick={handleSignOut}
-                className="p-2.5 rounded-2xl bg-white/5 text-slate-300 hover:bg-rose-500/10 hover:text-rose-400 transition-all border border-white/5 group"
+                className="p-2 rounded-lg bg-[#121418] text-[#A1A1AA] hover:bg-rose-500/10 hover:text-rose-400 transition-all border border-white/5 active:scale-95"
                 title="Sign Out"
               >
-                <LogOut className="h-6 w-6 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-
-              <button 
-                onClick={() => setActiveMenu('sales')}
-                className="p-2.5 rounded-2xl bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition-all border border-white/5"
-              >
-                <MenuIcon className="h-6 w-6" />
-              </button>
+                <LogOut className="h-4 w-4" />
+               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <SideMenu
-        isOpen={activeMenu !== null}
-        onClose={() => setActiveMenu(null)}
-        editingSale={editingSale}
-        onCancelEdit={handleCancelEdit}
-        onAddSale={handleAddSale}
-        onUpdateSale={handleUpdateSale}
-        inventory={inventory}
-        shopOptions={shopOptions}
-        stockTypes={stockTypes}
-        onAddDelivery={handleAddDelivery}
-        onDeleteDelivery={handleDeleteDelivery}
-        activeAccordion={activeMenu}
-        onToggleAccordion={handleToggleAccordion}
+      <NavMenu
+        isOpen={isNavMenuOpen}
+        onClose={() => setIsNavMenuOpen(false)}
+        currentView={currentView}
+        onNavigate={(v) => { setCurrentView(v); setIsNavMenuOpen(false); }}
+        onExportCSV={onExportCSV}
+        hasSalesToExport={filteredSales.length > 0}
+        isReadOnly={!hasEditPermission}
       />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-        >
-          <DashboardPage
-            sales={sales}
-            summaryData={summaryData}
-            shopOptions={shopOptions}
-            onEditSale={handleEditSale}
-            onDeleteSale={handleDeleteSale}
-            onOpenAddSale={handleOpenAddSale}
-            onOpenInventory={handleOpenInventory}
-          />
-        </motion.div>
+        <AnimatePresence mode="wait">
+          {currentView === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <DashboardPage
+                sales={sales}
+                summaryData={summaryData}
+                shopOptions={shopOptions}
+                onEditSale={handleEditSale}
+                onDeleteSale={handleDeleteSale}
+                isReadOnly={!hasEditPermission}
+                isUserPrincipal={isUserPrincipal}
+                invitations={invitations}
+                onSendInvitation={handleSendInvitation}
+                onRevokeInvitation={handleRevokeInvitation}
+                filters={filters}
+                filteredSales={filteredSales}
+                onFilterChange={(e) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }))}
+                onDateChange={(name, date) => setFilters(prev => ({ ...prev, [name]: date }))}
+                onClearFilters={() => setFilters({ shopName: "", startDate: "", endDate: "" })}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'new-sale' && (
+            <motion.div
+              key="new-sale"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <div className="bg-[#121418] rounded-2xl border border-white/5 p-6 sm:p-8">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-display font-medium text-white mb-2">
+                    {editingSale ? 'Edit Sale Record' : 'New Sale Record'}
+                  </h2>
+                  <p className="text-[#A1A1AA]">
+                    {editingSale ? 'Update the details for this sale.' : 'Enter the details for a new sale transaction.'}
+                  </p>
+                </div>
+                <SalesForm
+                  onSubmit={editingSale ? handleUpdateSale : handleAddSale}
+                  onCancelEdit={handleCancelEdit}
+                  editingSale={editingSale}
+                  inventory={inventory}
+                  shopOptions={shopOptions}
+                  stockTypes={stockTypes}
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {currentView === 'inventory' && (
+            <motion.div
+              key="inventory"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <div className="bg-[#121418] rounded-2xl border border-white/5 p-6 sm:p-8">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-display font-medium text-white mb-2">
+                    Inventory Management
+                  </h2>
+                  <p className="text-[#A1A1AA]">
+                    Manage stock deliveries and track current inventory levels across all shops.
+                  </p>
+                </div>
+                <InventoryManager
+                  inventory={inventory}
+                  shopOptions={shopOptions}
+                  onAddDelivery={handleAddDelivery}
+                  onDeleteDelivery={handleDeleteDelivery}
+                  stockTypes={stockTypes}
+                  isReadOnly={!hasEditPermission}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

@@ -62,6 +62,20 @@
         "authorUid": { "type": "string", "description": "UID of the user who owns this inventory" }
       },
       "required": ["shopName", "currentStock", "deliveries", "authorUid"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "An invitation/permission granted by a principal user to a collaborator",
+      "type": "object",
+      "properties": {
+        "principalUid": { "type": "string", "description": "UID of the inviting principal" },
+        "principalEmail": { "type": "string", "description": "Email of the inviting principal" },
+        "collaboratorEmail": { "type": "string", "description": "Email of the invited collaborator" },
+        "permission": { "type": "string", "enum": ["view", "edit"], "description": "Permission level given to user" },
+        "invitedAt": { "type": "string", "description": "ISO timestamp of invitation" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of invitation" }
+      },
+      "required": ["principalUid", "principalEmail", "collaboratorEmail", "permission", "invitedAt", "createdAt"]
     }
   },
   "firestore": {
@@ -76,6 +90,10 @@
     "/users/{userId}/inventory/{shopId}": {
       "schema": "ShopInventory",
       "description": "Inventory data for a specific user's shop"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Collaboration permissions and invitations granted by a principal user"
     }
   }
 }
