@@ -67,11 +67,11 @@ const DEFAULT_SHOPS = [
   'Bibi',
   'BEATRICE'
 ];
-const stockTypes: StockType[] = ['DANGOTE', 'ASHAKA'];
+const stockTypes: StockType[] = ['ASHAKA', '3X', 'BLOCKMASTER'];
 
 const initialInventory: InventoryData = DEFAULT_SHOPS.reduce((acc, shopName) => {
   acc[shopName] = { 
-    currentStock: { DANGOTE: 0, ASHAKA: 0 }, 
+    currentStock: { ASHAKA: 0, '3X': 0, BLOCKMASTER: 0 }, 
     deliveries: [] 
   };
   return acc;
@@ -140,7 +140,7 @@ const AppContent: React.FC = () => {
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'new-sale' | 'inventory'>('dashboard');
   const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
-  const [filters, setFilters] = useState({ shopName: "", startDate: "", endDate: "" });
+  const [filters, setFilters] = useState({ shopName: "", startDate: "", endDate: "", stockType: "ALL" });
   const { showToast } = useToast();
 
   const shopOptions = DEFAULT_SHOPS;
@@ -313,15 +313,22 @@ const AppContent: React.FC = () => {
       shopInventory.deliveries = [];
     }
     
-    const updatedStock = { DANGOTE: 0, ASHAKA: 0 };
+    const updatedStock = { ASHAKA: 0, '3X': 0, BLOCKMASTER: 0, DANGOTE: 0 };
     shopInventory.deliveries.forEach((d: any) => {
       // Logic for backward compatibility: if remainingQuantity is missing, use quantity
       if (d.remainingQuantity === undefined || d.remainingQuantity === null) {
         d.remainingQuantity = d.quantity || 0;
       }
       
-      if (d.stockType === 'DANGOTE') updatedStock.DANGOTE += Number(d.remainingQuantity) || 0;
-      if (d.stockType === 'ASHAKA') updatedStock.ASHAKA += Number(d.remainingQuantity) || 0;
+      const rem = Number(d.remainingQuantity) || 0;
+      if (d.stockType === 'ASHAKA') {
+        updatedStock.ASHAKA += rem;
+      } else if (d.stockType === '3X') {
+        updatedStock['3X'] += rem;
+      } else if (d.stockType === 'BLOCKMASTER' || d.stockType === 'DANGOTE' || d.stockType === 'BLOCK MASTER') {
+        updatedStock.BLOCKMASTER += rem;
+        updatedStock.DANGOTE += rem;
+      }
     });
     
     shopInventory.currentStock = updatedStock;
@@ -527,7 +534,7 @@ const AppContent: React.FC = () => {
       const shopRef = doc(db, 'users', targetUid, 'inventory', shopName);
       let shopData = inventory[shopName] 
         ? JSON.parse(JSON.stringify(inventory[shopName]))
-        : { currentStock: { DANGOTE: 0, ASHAKA: 0 }, deliveries: [] };
+        : { currentStock: { ASHAKA: 0, '3X': 0, BLOCKMASTER: 0 }, deliveries: [] };
       
       const newDelivery: DeliveryRecord = {
         id: Math.random().toString(36).substring(2, 15),
@@ -647,7 +654,17 @@ const AppContent: React.FC = () => {
       const endDateMatch = filters.endDate
         ? sale.date <= filters.endDate
         : true;
-      return shopMatch && startDateMatch && endDateMatch;
+
+      const normType =
+        sale.stockType === 'DANGOTE' || sale.stockType === 'BLOCK MASTER'
+          ? 'BLOCKMASTER'
+          : sale.stockType;
+      const stockTypeMatch =
+        filters.stockType === 'ALL' || !filters.stockType
+          ? true
+          : normType === filters.stockType;
+
+      return shopMatch && startDateMatch && endDateMatch && stockTypeMatch;
     });
     // Sort logic to prioritize recent sales from top to bottom
     return list.sort((a, b) => {
@@ -810,7 +827,8 @@ const AppContent: React.FC = () => {
                 filteredSales={filteredSales}
                 onFilterChange={(e) => setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }))}
                 onDateChange={(name, date) => setFilters(prev => ({ ...prev, [name]: date }))}
-                onClearFilters={() => setFilters({ shopName: "", startDate: "", endDate: "" })}
+                onStockTypeChange={(stockType) => setFilters(prev => ({ ...prev, stockType }))}
+                onClearFilters={() => setFilters({ shopName: "", startDate: "", endDate: "", stockType: "ALL" })}
               />
             </motion.div>
           )}

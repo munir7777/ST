@@ -1,5 +1,5 @@
 
-export type StockType = 'DANGOTE' | 'ASHAKA';
+export type StockType = 'ASHAKA' | '3X' | 'BLOCKMASTER' | 'DANGOTE' | 'BLOCK MASTER';
 
 export interface SaleRecord {
   id: string;
@@ -29,8 +29,10 @@ export interface DeliveryRecord {
 
 export interface ShopInventory {
   currentStock: {
-    DANGOTE: number;
     ASHAKA: number;
+    '3X': number;
+    BLOCKMASTER: number;
+    DANGOTE?: number;
   };
   deliveries: DeliveryRecord[];
   authorUid?: string;

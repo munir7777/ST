@@ -100,7 +100,7 @@ service cloud.firestore {
       return data.keys().hasAll(['date', 'shopName', 'stockType', 'bagsSold', 'pricePerBag', 'totalTransfer', 'expenses', 'expectedRevenue', 'discrepancy', 'authorUid', 'deliveryId']) &&
              data.keys().size() >= 11 && data.keys().size() <= 12 &&
              isValidDateString(data.date) &&
-             data.stockType in ['DANGOTE', 'ASHAKA'] &&
+             data.stockType in ['ASHAKA', '3X', 'BLOCKMASTER', 'DANGOTE', 'BLOCK MASTER'] &&
              data.bagsSold >= 0 &&
              data.pricePerBag >= 0 &&
              data.totalTransfer >= 0 &&
@@ -114,8 +114,6 @@ service cloud.firestore {
       return data.keys().hasAll(['shopName', 'currentStock', 'deliveries', 'authorUid']) &&
              data.keys().size() == 4 &&
              data.currentStock is map &&
-             data.currentStock.DANGOTE is number &&
-             data.currentStock.ASHAKA is number &&
              data.deliveries is list &&
              data.deliveries.size() < 1000 &&
              data.authorUid == request.auth.uid;

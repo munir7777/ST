@@ -45,7 +45,23 @@ const initialDeliveryState = {
   shopName: "",
   quantity: "",
   date: getLocalDate(),
-  stockType: "DANGOTE" as StockType,
+  stockType: "ASHAKA" as StockType,
+};
+
+const formatStockTypeDisplay = (type: string) => {
+  if (type === "DANGOTE" || type === "BLOCK MASTER") return "BLOCKMASTER";
+  return type;
+};
+
+const getStockBadgeStyle = (type: string) => {
+  const norm = formatStockTypeDisplay(type);
+  if (norm === "ASHAKA") {
+    return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+  }
+  if (norm === "3X") {
+    return "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+  }
+  return "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20";
 };
 
 const formatDate = (dateString: string) => {
@@ -112,7 +128,10 @@ const DeliveryHistoryTable: React.FC<{
   const processedDeliveries = useMemo(() => {
     let items = [...deliveries];
     if (filterType !== "All") {
-      items = items.filter((d) => d.stockType === filterType);
+      items = items.filter((d) => {
+        const norm = formatStockTypeDisplay(d.stockType);
+        return norm === filterType || d.stockType === filterType;
+      });
     }
     items.sort((a, b) => {
       if (sortConfig.key === "date") {
@@ -127,8 +146,8 @@ const DeliveryHistoryTable: React.FC<{
       }
       // stockType
       return sortConfig.direction === "ascending"
-        ? a.stockType.localeCompare(b.stockType)
-        : b.stockType.localeCompare(a.stockType);
+        ? formatStockTypeDisplay(a.stockType).localeCompare(formatStockTypeDisplay(b.stockType))
+        : formatStockTypeDisplay(b.stockType).localeCompare(formatStockTypeDisplay(a.stockType));
     });
     return items;
   }, [deliveries, filterType, sortConfig]);
@@ -234,13 +253,9 @@ const DeliveryHistoryTable: React.FC<{
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                        delivery.stockType === "DANGOTE"
-                          ? "bg-indigo-500/10 text-indigo-400"
-                          : "bg-emerald-500/10 text-emerald-400"
-                      }`}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${getStockBadgeStyle(delivery.stockType)}`}
                     >
-                      {delivery.stockType}
+                      {formatStockTypeDisplay(delivery.stockType)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-white text-right font-mono font-bold">
@@ -333,7 +348,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       deliveryData.stockType,
     );
     setDeliveryData(initialDeliveryState);
-    showToast("Delivery added successfully!", "success");
   };
 
   const handleOpenDeleteModal = (
@@ -351,7 +365,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     if (deliveryToDelete) {
       onDeleteDelivery(deliveryToDelete.shopName, deliveryToDelete.delivery.id);
       setDeliveryToDelete(null);
-      showToast("Delivery record deleted.", "success");
     }
   };
 
@@ -506,16 +519,19 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             <table className="min-w-full border-separate border-spacing-0">
               <thead className="bg-slate-900/50">
                 <tr>
-                  <th className="px-8 py-5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <th className="px-6 py-5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Shop Location
                   </th>
-                  <th className="px-8 py-5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Dangote
-                  </th>
-                  <th className="px-8 py-5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <th className="px-6 py-5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Ashaka
                   </th>
-                  <th className="px-8 py-5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <th className="px-6 py-5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    3X
+                  </th>
+                  <th className="px-6 py-5 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    BlockMaster
+                  </th>
+                  <th className="px-6 py-5 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Details
                   </th>
                 </tr>
@@ -524,6 +540,28 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 {shopOptions.map((shopName) => {
                   const shopData = inventory[shopName];
                   const isExpanded = expandedShop === shopName;
+                  const deliveries = shopData?.deliveries || [];
+
+                  const ashakaStock = shopData?.currentStock?.ASHAKA || 0;
+                  const threeXStock = (shopData?.currentStock as any)?.["3X"] || 0;
+                  const blockMasterStock =
+                    (shopData?.currentStock as any)?.BLOCKMASTER ||
+                    (shopData?.currentStock as any)?.DANGOTE ||
+                    0;
+
+                  const ashakaBatches = deliveries.filter(
+                    (d) => d.stockType === "ASHAKA" && d.remainingQuantity > 0,
+                  ).length;
+                  const threeXBatches = deliveries.filter(
+                    (d) => d.stockType === "3X" && d.remainingQuantity > 0,
+                  ).length;
+                  const blockMasterBatches = deliveries.filter(
+                    (d) =>
+                      (d.stockType === "BLOCKMASTER" ||
+                        d.stockType === "DANGOTE" ||
+                        d.stockType === "BLOCK MASTER") &&
+                      d.remainingQuantity > 0,
+                  ).length;
 
                   return (
                     <React.Fragment key={shopName}>
@@ -531,48 +569,42 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         onClick={() => handleToggleExpand(shopName)}
                         className={`group cursor-pointer transition-all duration-300 ${isExpanded ? "bg-indigo-600/10" : "hover:bg-white/5"}`}
                       >
-                        <td className="px-8 py-5">
+                        <td className="px-6 py-5">
                           <span className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">
                             {shopName}
                           </span>
                         </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="text-sm font-black text-indigo-400 font-mono">
-                              {shopData?.currentStock?.DANGOTE || 0}
-                            </span>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
-                              From{" "}
-                              {
-                                (shopData?.deliveries || []).filter(
-                                  (d) =>
-                                    d.stockType === "DANGOTE" &&
-                                    d.remainingQuantity > 0,
-                                ).length
-                              }{" "}
-                              Batches
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-5 text-right">
+                        <td className="px-6 py-5 text-right">
                           <div className="flex flex-col items-end">
                             <span className="text-sm font-black text-emerald-400 font-mono">
-                              {shopData?.currentStock?.ASHAKA || 0}
+                              {ashakaStock}
                             </span>
                             <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
-                              From{" "}
-                              {
-                                (shopData?.deliveries || []).filter(
-                                  (d) =>
-                                    d.stockType === "ASHAKA" &&
-                                    d.remainingQuantity > 0,
-                                ).length
-                              }{" "}
-                              Batches
+                              From {ashakaBatches} Batches
                             </span>
                           </div>
                         </td>
-                        <td className="px-8 py-5 text-center">
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-black text-sky-400 font-mono">
+                              {threeXStock}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
+                              From {threeXBatches} Batches
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-black text-indigo-400 font-mono">
+                              {blockMasterStock}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
+                              From {blockMasterBatches} Batches
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-center">
                           <motion.div
                             animate={{ rotate: isExpanded ? 180 : 0 }}
                             className={`inline-flex p-2 rounded-xl transition-all ${isExpanded ? "bg-indigo-500/20 text-indigo-400" : "text-slate-500 group-hover:text-white"}`}
@@ -584,7 +616,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <AnimatePresence>
                         {isExpanded && (
                           <tr>
-                            <td colSpan={4} className="p-0 bg-slate-900/30">
+                            <td colSpan={5} className="p-0 bg-slate-900/30">
                               <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: "auto", opacity: 1 }}
@@ -634,57 +666,53 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         onConfirm={handleConfirmDelete}
         title="Delete Delivery Record"
       >
-        <div className="space-y-6">
-          <div className="flex items-start gap-4 p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20">
-            <AlertCircle className="h-6 w-6 text-rose-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-rose-200 leading-relaxed">
+        <div className="space-y-3.5">
+          <div className="flex items-start gap-3 p-3 bg-rose-500/10 rounded-xl border border-rose-500/20">
+            <AlertCircle className="h-5 w-5 text-rose-400 shrink-0 mt-0.5" />
+            <p className="text-xs sm:text-sm text-rose-200 leading-relaxed">
               Are you sure you want to delete this delivery record? This will
-              automatically decrease the current stock level for this shop.
+              decrease the current stock level for this shop.
             </p>
           </div>
 
-          <div className="bg-slate-950 p-6 rounded-3xl border border-white/5 space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-white/5">
+          <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-xl border border-white/5 space-y-2.5">
+            <div className="flex justify-between items-center pb-2 border-b border-white/5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Shop Location
               </span>
-              <span className="text-sm font-bold text-white">
+              <span className="text-xs sm:text-sm font-bold text-white">
                 {deliveryToDelete?.shopName}
               </span>
             </div>
-            <div className="flex justify-between items-center pb-3 border-b border-white/5">
+            <div className="flex justify-between items-center pb-2 border-b border-white/5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Delivery Date
               </span>
-              <span className="text-sm font-bold text-white">
+              <span className="text-xs sm:text-sm font-bold text-white">
                 {formatDate(deliveryToDelete?.delivery.date ?? "")}
               </span>
             </div>
-            <div className="flex justify-between items-center pb-3 border-b border-white/5">
+            <div className="flex justify-between items-center pb-2 border-b border-white/5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Product Type
               </span>
               <span
-                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${
-                  deliveryToDelete?.delivery.stockType === "DANGOTE"
-                    ? "bg-indigo-500/10 text-indigo-400"
-                    : "bg-emerald-500/10 text-emerald-400"
-                }`}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${getStockBadgeStyle(deliveryToDelete?.delivery.stockType || "")}`}
               >
-                {deliveryToDelete?.delivery.stockType}
+                {formatStockTypeDisplay(deliveryToDelete?.delivery.stockType || "")}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                 Quantity
               </span>
-              <span className="text-sm font-black text-white font-mono">
+              <span className="text-xs sm:text-sm font-black text-white font-mono">
                 {deliveryToDelete?.delivery.quantity} bags
               </span>
             </div>
           </div>
 
-          <p className="text-[10px] text-center font-bold text-slate-600 uppercase tracking-widest">
+          <p className="text-[10px] text-center font-bold text-slate-500 uppercase tracking-widest">
             This action cannot be undone
           </p>
         </div>

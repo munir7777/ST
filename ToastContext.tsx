@@ -13,7 +13,13 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts(prev => {
+      // Prevent showing the exact same toast message multiple times concurrently
+      if (prev.some(t => t.message === message)) {
+        return prev;
+      }
+      return [...prev, { id, message, type }];
+    });
   }, []);
 
   const removeToast = useCallback((id: string) => {

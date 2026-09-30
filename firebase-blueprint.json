@@ -20,7 +20,7 @@
       "properties": {
         "date": { "type": "string", "format": "date", "description": "Date of sale" },
         "shopName": { "type": "string", "description": "Name of the shop" },
-        "stockType": { "type": "string", "enum": ["DANGOTE", "ASHAKA"], "description": "Type of cement" },
+        "stockType": { "type": "string", "enum": ["ASHAKA", "3X", "BLOCKMASTER", "DANGOTE", "BLOCK MASTER"], "description": "Type of cement" },
         "bagsSold": { "type": "number", "description": "Number of bags sold" },
         "pricePerBag": { "type": "number", "description": "Price per bag" },
         "totalTransfer": { "type": "number", "description": "Total amount transferred" },
@@ -42,8 +42,10 @@
         "currentStock": {
           "type": "object",
           "properties": {
-            "DANGOTE": { "type": "number" },
-            "ASHAKA": { "type": "number" }
+            "ASHAKA": { "type": "number" },
+            "3X": { "type": "number" },
+            "BLOCKMASTER": { "type": "number" },
+            "DANGOTE": { "type": "number" }
           }
         },
         "deliveries": {
@@ -55,7 +57,7 @@
               "date": { "type": "string", "format": "date" },
               "quantity": { "type": "number" },
               "remainingQuantity": { "type": "number" },
-              "stockType": { "type": "string", "enum": ["DANGOTE", "ASHAKA"] }
+              "stockType": { "type": "string", "enum": ["ASHAKA", "3X", "BLOCKMASTER", "DANGOTE", "BLOCK MASTER"] }
             }
           }
         },

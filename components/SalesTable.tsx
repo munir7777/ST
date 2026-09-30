@@ -93,9 +93,14 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onEdit, onDelete,
             <tbody>
               {sales.map(sale => {
                 const isExpanded = expandedRowId === sale.id;
-                const brandBadgeStyle = sale.stockType === "DANGOTE"
-                  ? "bg-teal-500/10 text-teal-400 border border-teal-500/20"
-                  : "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                const normalizedType = (sale.stockType === "DANGOTE" || sale.stockType === "BLOCK MASTER") ? "BLOCKMASTER" : sale.stockType;
+                
+                let brandBadgeStyle = "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20";
+                if (normalizedType === "ASHAKA") {
+                  brandBadgeStyle = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                } else if (normalizedType === "3X") {
+                  brandBadgeStyle = "bg-sky-500/10 text-sky-400 border border-sky-500/20";
+                }
 
                 return (
                   <React.Fragment key={sale.id}>
@@ -123,7 +128,7 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onEdit, onDelete,
                             <span className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors">{sale.shopName}</span>
                             <div className="flex items-center gap-2 mt-1.5">
                                 <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${brandBadgeStyle}`}>
-                                  {sale.stockType}
+                                  {normalizedType}
                                 </span>
                                 <span className="text-xs font-bold text-slate-500 font-mono flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />

@@ -52,60 +52,59 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
           />
           
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden"
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="relative w-full max-w-md sm:max-w-lg my-auto max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col bg-[#121418] border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
           >
-            <div className="p-8 sm:p-10">
-              <div className="flex items-start gap-6">
-                <div className={`flex-shrink-0 p-4 ${colors.bg} rounded-2xl`}>
-                  <AlertTriangle className={`h-8 w-8 ${colors.icon}`} />
+            {/* Modal Header */}
+            <div className="p-4 sm:p-6 pb-3 sm:pb-4 flex items-center justify-between border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 sm:p-2.5 ${colors.bg} rounded-xl shrink-0`}>
+                  <AlertTriangle className={`h-5 w-5 ${colors.icon}`} />
                 </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-2xl font-black text-white tracking-tight">{title}</h3>
-                    <button 
-                      onClick={onClose}
-                      className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-colors"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                  
-                  <div className="text-slate-400 font-medium leading-relaxed">
-                    {message || children}
-                  </div>
-                </div>
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">{title}</h3>
               </div>
-              
-              <div className="flex flex-col sm:flex-row gap-3 mt-10">
-                <button
-                  type="button"
-                  onClick={onConfirm}
-                  className={`flex-1 py-4 px-6 rounded-2xl text-white font-bold shadow-lg transition-all active:scale-[0.98] ${colors.button}`}
-                >
-                  {confirmText}
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 py-4 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl border border-white/5 transition-all active:scale-[0.98]"
-                >
-                  {cancelText}
-                </button>
-              </div>
+              <button 
+                onClick={onClose}
+                className="p-1.5 hover:bg-white/5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Modal Body (Scrollable) */}
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+              {message || children}
+            </div>
+            
+            {/* Modal Actions Footer */}
+            <div className="p-4 sm:p-6 pt-3 sm:pt-4 border-t border-white/5 bg-[#0e1014] shrink-0 flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full sm:flex-1 py-3 px-4 bg-white/5 hover:bg-white/10 text-slate-300 font-bold rounded-xl border border-white/5 text-xs sm:text-sm transition-all active:scale-[0.98]"
+              >
+                {cancelText}
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                className={`w-full sm:flex-1 py-3 px-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-lg transition-all active:scale-[0.98] ${colors.button}`}
+              >
+                {confirmText}
+              </button>
             </div>
           </motion.div>
         </div>

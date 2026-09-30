@@ -79,10 +79,15 @@ const getLocalDate = () => {
     return `${year}-${month}-${day}`;
 }
 
+const normalizeStockType = (type: string) => {
+  if (type === 'DANGOTE' || type === 'BLOCK MASTER') return 'BLOCKMASTER';
+  return type;
+};
+
 const initialFormState = {
   date: getLocalDate(),
   shopName: '',
-  stockType: 'DANGOTE' as StockType,
+  stockType: 'ASHAKA' as StockType,
   bagsSold: '',
   pricePerBag: '',
   totalTransfer: '',
@@ -118,8 +123,9 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
   useEffect(() => {
     // Smart selection of delivery
     if (formData.shopName && formData.stockType && !editingSale) {
+      const normFormType = normalizeStockType(formData.stockType);
       const deliveries = (inventory[formData.shopName]?.deliveries || [])
-        .filter(d => d.stockType === formData.stockType && d.remainingQuantity > 0)
+        .filter(d => normalizeStockType(d.stockType) === normFormType && d.remainingQuantity > 0)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
       if (deliveries.length > 0 && formData.deliveryId === '') {
@@ -180,14 +186,15 @@ export const SalesForm: React.FC<SalesFormProps> = ({ onSubmit, editingSale, onC
     onSubmit(submissionData);
     if (!editingSale) {
       setFormData(initialFormState);
-      showToast('Sale record added successfully!', 'success');
-    } else {
-      showToast('Sale record updated successfully!', 'success');
     }
   };
   
   const availableDeliveries = formData.shopName && formData.stockType
-    ? (inventory[formData.shopName]?.deliveries || []).filter(d => d.stockType === formData.stockType && d.remainingQuantity > 0)
+    ? (inventory[formData.shopName]?.deliveries || []).filter(d => {
+        const normD = normalizeStockType(d.stockType);
+        const normForm = normalizeStockType(formData.stockType);
+        return normD === normForm && d.remainingQuantity > 0;
+      })
     : [];
   
   // Calculate total stock from individual deliveries for UI consistency

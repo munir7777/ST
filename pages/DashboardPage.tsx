@@ -42,10 +42,11 @@ interface DashboardPageProps {
   invitations?: any[];
   onSendInvitation?: (email: string, permission: "view" | "edit") => Promise<void>;
   onRevokeInvitation?: (id: string) => Promise<void>;
-  filters: { shopName: string; startDate: string; endDate: string };
+  filters: { shopName: string; startDate: string; endDate: string; stockType: string };
   filteredSales: SaleRecord[];
   onFilterChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onDateChange: (name: "startDate" | "endDate", date: string) => void;
+  onStockTypeChange: (stockType: string) => void;
   onClearFilters: () => void;
 }
 
@@ -137,12 +138,47 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   filteredSales,
   onFilterChange,
   onDateChange,
+  onStockTypeChange,
   onClearFilters,
 }) => {
   const [activeTab, setActiveTab] = useState<"sales" | "performance" | "team">("sales");
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null);
   const { showToast } = useToast();
+
+  const productStats = useMemo(() => {
+    const baseList = sales.filter((sale) => {
+      const shopMatch = filters.shopName
+        ? sale.shopName.toLowerCase().includes(filters.shopName.toLowerCase())
+        : true;
+      const startDateMatch = filters.startDate
+        ? sale.date >= filters.startDate
+        : true;
+      const endDateMatch = filters.endDate
+        ? sale.date <= filters.endDate
+        : true;
+      return shopMatch && startDateMatch && endDateMatch;
+    });
+
+    const counts = {
+      ALL: baseList.length,
+      ASHAKA: 0,
+      "3X": 0,
+      BLOCKMASTER: 0,
+    };
+
+    baseList.forEach((s) => {
+      const norm =
+        s.stockType === "DANGOTE" || s.stockType === "BLOCK MASTER"
+          ? "BLOCKMASTER"
+          : s.stockType;
+      if (norm === "ASHAKA") counts.ASHAKA++;
+      else if (norm === "3X") counts["3X"]++;
+      else if (norm === "BLOCKMASTER") counts.BLOCKMASTER++;
+    });
+
+    return counts;
+  }, [sales, filters.shopName, filters.startDate, filters.endDate]);
 
   const handleOpenDeleteModal = (sale: SaleRecord) => {
     setSaleToDelete(sale);
@@ -305,6 +341,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
         </div>
 
+        {/* Product Selection Tabs: ASHAKA, 3X, BLOCKMASTER */}
+        <div className="px-6 sm:px-8 pb-4 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {[
+            { id: "ALL", label: "All Products", count: productStats.ALL, activeClass: "bg-white/10 text-white border-white/20" },
+            { id: "ASHAKA", label: "Ashaka", count: productStats.ASHAKA, activeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+            { id: "3X", label: "3X", count: productStats["3X"], activeClass: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+            { id: "BLOCKMASTER", label: "BlockMaster", count: productStats.BLOCKMASTER, activeClass: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30" },
+          ].map((tab) => {
+            const isSelected = filters.stockType === tab.id || (!filters.stockType && tab.id === "ALL");
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onStockTypeChange(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shrink-0 ${
+                  isSelected
+                    ? `${tab.activeClass} shadow-sm shadow-black/20`
+                    : "bg-slate-950/60 text-slate-400 border-white/5 hover:bg-white/5 hover:text-slate-200"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                    isSelected ? "bg-white/10 text-white font-bold" : "bg-white/5 text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="border-t border-white/5">
           <AnimatePresence>
             {isFilterVisible && (
@@ -409,26 +477,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         onConfirm={handleConfirmDelete}
         title="Delete Sale Record"
         message={
-          <div className="space-y-4">
-            <p className="text-slate-300">
+          <div className="space-y-3.5">
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Are you sure you want to delete this sale record? This action will
               revert the inventory levels and cannot be undone.
             </p>
             {saleToDelete && (
-              <div className="p-4 bg-slate-950 rounded-2xl border border-white/5 space-y-2">
+              <div className="p-3.5 sm:p-4 bg-slate-950/70 rounded-xl border border-white/5 space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Shop
                   </span>
-                  <span className="text-sm font-bold text-white">
+                  <span className="font-bold text-white">
                     {saleToDelete.shopName}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Amount
                   </span>
-                  <span className="text-sm font-bold text-emerald-400 font-mono">
+                  <span className="font-bold text-emerald-400 font-mono">
                     {new Intl.NumberFormat("en-NG", {
                       style: "currency",
                       currency: "NGN",
@@ -436,10 +504,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     Date
                   </span>
-                  <span className="text-sm font-bold text-slate-300">
+                  <span className="font-medium text-slate-300">
                     {formatDateForModal(saleToDelete.date)}
                   </span>
                 </div>

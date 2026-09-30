@@ -76,9 +76,14 @@ export const handleDownloadCSV = (filteredSales: SaleRecord[], filters: { startD
         shopExpenses += record.expenses;
         shopDiscrepancy += record.discrepancy;
 
+        const normalizedStockType =
+          record.stockType === "DANGOTE" || record.stockType === "BLOCK MASTER"
+            ? "BLOCKMASTER"
+            : record.stockType;
+
         const row = [
           record.date,
-          record.stockType,
+          normalizedStockType,
           record.bagsSold,
           record.pricePerBag,
           record.expectedRevenue,
